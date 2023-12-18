@@ -1,0 +1,231 @@
+SQL queries used on the airline database:
+
+1.	 Find list of airport codes in Europe/Moscow timezone
+
+select airport_code
+from airports
+where timezone = 'Europe/Moscow'
+
+2.	Write a query to get the count of seats in various fare condition for every aircraft code?
+ 
+select aircraft_code, fare_conditions, count(seat_no) as seat_count
+from seats 
+group by 1,2
+order by 1 
+
+3.	How many aircrafts codes have at least one Business class seats?
+ 
+with businessclass as (select fare_conditions, count(distinct aircraft_code) as seat_count
+from seats 
+group by 1
+having fare_conditions = 'Business')
+
+select seat_count
+from businessclass
+
+4.	Find out the name of the airport having maximum number of departure flight
+ 
+with table1 as (
+    select f.*, a.airport_name
+    from flights f 
+    left join airports a 
+    on f.departure_airport = a.airport_code),
+table2 as (
+select airport_name, departure_airport, count(scheduled_departure),
+rank() over(order by count(scheduled_departure) desc) as rnk 
+from table1
+group by 1,2)
+select airport_name
+from table2
+where rnk = 1
+
+5.	Find out the name of the airport having least number of scheduled departure flights
+ 
+with table1 as (
+    select f.*, a.airport_name
+    from flights f 
+    left join airports a 
+    on f.departure_airport = a.airport_code),
+table2 as (
+select airport_name, departure_airport, count(scheduled_departure),
+rank() over(order by count(scheduled_departure) asc) as rnk 
+from table1
+group by 1,2)
+select airport_name
+from table2
+where rnk = 1
+
+
+6.	How many flights from ‘DME’ airport don’t have actual departure?
+
+select count(flight_no) as flight_count
+from flights
+where departure_airport = 'DME' and actual_departure is null
+
+7.	Identify flight ids having range between 3000 to 6000
+
+select flight_no, aircraft_code, range
+from (
+    select f.*, a.range 
+    from flights f 
+    left join aircrafts a 
+    on f.aircraft_code = a.aircraft_code) as table1
+where range between 3000 and 6000
+group by 1,2,3
+
+8.	Write a query to get the count of flights flying between URS and KUF?
+ 
+select count(flight_id)
+from flights 
+where (departure_airport = 'URS' or departure_airport = 'KUF') and (arrival_airport = 'URS' or arrival_airport = 'KUF')
+
+9.	Write a query to get the count of flights flying from either from NOZ or KRR?
+
+select count(flight_id)
+from flights 
+where departure_airport = 'NOZ' or departure_airport = 'KRR'
+
+
+10.	Write a query to get the count of flights flying from KZN,DME,NBC,NJC,GDX,SGC,VKO,ROV
+
+select departure_airport, count(flight_id)
+from flights 
+where departure_airport in ('KZN','DME','NBC','NJC','GDX','SGC','VKO','ROV')
+group by 1
+
+
+11.	Write a query to extract flight details having range between 3000 and 6000 and flying from DME
+
+select flight_no, aircraft_code, range, departure_airport
+from (
+    select f.*, a.range 
+    from flights f 
+    left join aircrafts a 
+    on f.aircraft_code = a.aircraft_code) as table1
+where range between 3000 and 6000 and departure_airport = 'DME'
+group by 1,2,3,4
+
+12.	Find the list of flight ids which are using aircrafts from “Airbus” company and got cancelled or delayed
+ 
+select flight_id, model
+from (
+    select f.*, a.model 
+    from flights f 
+    left join aircrafts a 
+    on f.aircraft_code = a.aircraft_code) as table1
+where model like '%Airbus%' and (status = 'Cancelled' or status = 'Delayed')
+
+
+13.	Find the list of flight ids which are using aircrafts from “Boeing” company and got cancelled or delayed
+
+select flight_id, model
+from (
+    select f.*, a.model 
+    from flights f 
+    left join aircrafts a 
+    on f.aircraft_code = a.aircraft_code) as table1
+where model like '%Boeing%' and (status = 'Cancelled' or status = 'Delayed')
+
+
+14.	Which airport(name) has most cancelled flights (arriving)?
+
+with table1 as(
+    select f.*, a.Airport_name
+    from flights f 
+    left join airports a 
+    on f.arrival_airport = a.airport_code),
+table2 as (
+    select Airport_name, status, count(status) as count_status,
+    rank() over(order by count(status) desc) as rnk 
+    from table1
+    group by 1,2
+    having status = 'Cancelled'
+)
+select Airport_name
+from table2 
+where rnk = 1
+
+15.	Identify flight ids which are using “Airbus aircrafts”
+
+select flight_id, model
+from (
+    select f.*, a.model 
+    from flights f 
+    left join aircrafts a 
+    on f.aircraft_code = a.aircraft_code) as table1
+where model like '%Airbus%'
+
+
+16.	Identify date-wise last flight id flying from every airport?
+
+with datetable as (select *, to_char(scheduled_departure, 'DD-MM-YYYY') as departure_date
+from flights ),
+table1 as (select Flight_id, flight_no, scheduled_departure, departure_airport,
+rank() over(partition by departure_airport, departure_date order by scheduled_departure desc) as rnk 
+from datetable)
+
+select Flight_id, flight_no, scheduled_departure, departure_airport
+from table1 
+where rnk = 1
+
+
+17.	Identify list of customers who will get the refund due to cancellation of the flights and how much amount they will get?
+
+with table1 as (select tf.*, t.passenger_name
+from ticket_flights tf 
+left join tickets t
+on tf.ticket_no = t.ticket_no),
+
+table2 as(
+    select f.*, t1.amount, t1.passenger_name
+    from flights f 
+    left join table1 t1
+    on f.flight_id = t1.flight_id
+)
+
+select *
+from table2 
+where status = 'Cancelled'
+
+
+
+18.	Identify date wise first cancelled flight id flying for every airport?
+
+with datetable as (select *, to_char(scheduled_departure, 'DD-MM-YYYY') as departure_date
+from flights ),
+table1 as (select Flight_id, flight_no, scheduled_departure, departure_airport,
+rank() over(partition by departure_airport, departure_date order by scheduled_departure asc) as rnk 
+from datetable
+where status = 'Cancelled')
+
+select Flight_id, flight_no, scheduled_departure, departure_airport
+from table1 
+where rnk = 1
+
+19.	Identify list of Airbus flight ids which got cancelled.
+
+with table1 as (select f.*, a.model
+from flights f 
+left join aircrafts a 
+on f.aircraft_code = a.aircraft_code)
+
+select flight_id 
+from table1
+where model like '%Airbus%' and status = 'Cancelled'
+
+20.	Identify list of flight ids having highest range.
+
+with table1 as (select f.*, a.range
+from flights f 
+left join aircrafts a 
+on f.aircraft_code = a.aircraft_code),
+
+table2 as (
+    select *,
+    rank() over(order by range desc) as rnk 
+    from table1
+)
+select flight_no, range 
+from table2
+where rnk = 1
+group by 1,2
